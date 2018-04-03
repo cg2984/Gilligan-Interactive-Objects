@@ -53,7 +53,7 @@ void loop() {
    Serial.println("backwards"); 
   }
 //stop
-  else if (buttonState == 0 && buttonState2 == 0) {
+  else (buttonState == 0 && buttonState2 == 0) {
     digitalWrite(enablePin, LOW); 
     digitalWrite(motorPin1, LOW);
     digitalWrite(motorPin2, LOW); 
