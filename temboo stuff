@@ -37,6 +37,8 @@ main .ino file without worrying that you forgot to delete your credentials.
 
 int calls = 1;   // Execution count, so this doesn't run forever
 int maxCalls = 10;   // Maximum number of times the Choreo should be executed
+char character; //makes space for the xml spreadsheet
+String content = ""; //adds a part to the string. it ads the qote to the string.
 
 void setup() {
   Serial.begin(9600);
@@ -73,6 +75,19 @@ void loop() {
     while(WeatherByZipcodeChoreo.available()) {
       char c = WeatherByZipcodeChoreo.read();
       Serial.print(c);
+      
+      
+      
+  // this part will make the xml data usable? 
+  while(Serial.available()) {
+      character = Serial.read();
+      content.concat(character);
+  }
+
+  if (content != "") {
+    Serial.println(content);
+  }
+      
     }
     WeatherByZipcodeChoreo.close();
   }
