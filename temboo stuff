@@ -1,4 +1,5 @@
-*
+///////////////////////////////////////////////BEGINNING OF HEADER CODE/////////////////////////////////////////////////////////////////
+/*
 IMPORTANT NOTE about TembooAccount.h
 
 TembooAccount.h contains your Temboo account information and must be included
@@ -20,188 +21,54 @@ Keeping your account information in a separate file means you can share the
 main .ino file without worrying that you forgot to delete your credentials.
 */
 
+////////////////////////////////////BEGINNING OF API CODE///////////////////////////////////////////////////////////////////////////////
 
-
+#include <Bridge.h>
 #include <Temboo.h>
-#include <TembooMonitoring.h>
-#include <limits.h>
-#include "utility/TembooGPIO.h"
-#include "TembooAccount.h" // Contains Temboo account information  
- 
-// Declaring sensor configs
-TembooGPIOConfig tmb_switchConfig;
+#include "TembooAccount.h" // contains Temboo account information, as described below
 
-// Declaring TembooSensors
-TembooSensor tmb_switch;
-
-// Choreo execution interval in milliseconds
-unsigned long choreoInterval = 300000; 
-// Store the time of the last Choreo execution
-unsigned long lastChoreoRunTime = millis() - choreoInterval; 
-
-// Monitoring interval in milliseconds
-unsigned long monitorInterval = 300000; 
-// Store the time of the last time sensor data was sent
-unsigned long lastMonitorRunTime = millis() - monitorInterval; 
-
-// Initializing TembooMessaging sensor array and object
-TembooSensor *sensors[1];
-TembooMessaging msg(sensors, 1);
-
-const unsigned long TEMBOO_CHOREO_TIMEOUT_MS = 900000;
+int calls = 1;   // Execution count, so this doesn't run forever
+int maxCalls = 10;   // Maximum number of times the Choreo should be executed
 
 void setup() {
   Serial.begin(9600);
-
-  Bridge.begin();
   
-  // Initialize sensors and configs
-  tembooDigitalGPIOInit(&tmb_switchConfig, &tmb_switch, 7, LOW, INPUT);
-
-  // Add sensors to the monitoring table
-  msg.addTembooSensor(&tmb_switch);
-
-  // Set account credentials
-  msg.setAccountName(TEMBOO_ACCOUNT);
-  msg.setAppKeyName(TEMBOO_APP_KEY_NAME);
-  msg.setAppKey(TEMBOO_APP_KEY);
-  msg.setDeviceID(TEMBOO_DEVICE_NAME);
-
-  Serial.println("Setup complete.\n");
+  // For debugging, wait until the serial console is connected
+  delay(4000);
+  while(!Serial);
+  Bridge.begin();
 }
 
-void loop() { 
-  tembooMessagingLoop();
-  if (msg.isConnected()) {
-    if(millis() - lastChoreoRunTime >= choreoInterval) {
-      int sensorValue = tmb_switch.read(&tmb_switchConfig);
-      Serial.println("Sensor: " + String(sensorValue));
-      if (sensorValue == HIGH) {
-        Serial.println("Calling WeatherByZipcode Choreo...");
-        runWeatherByZipcode(sensorValue);
-        lastChoreoRunTime = millis();
-      }
-      if (millis() - lastChoreoRunTime >= ULONG_MAX - 10000) {
-        lastChoreoRunTime = millis() - choreoInterval;
-      }
-    }
-  }
-}
-
-void tembooMessagingLoop() {
-  // Poll for data from Temboo
-  msg.poll();
-
-  // Connect if connection has been lost
-  if (!msg.isConnected()) {
-    int rc = msg.initiateConnection();
-    if (rc != 0 && rc != 253) {
-      Serial.print("Error starting messaging. Code: ");
-      Serial.println(rc);
-    }
-  }
-  if ((millis() - lastMonitorRunTime) >= monitorInterval) {
-    lastMonitorRunTime = millis();
+void loop() {
+  if (calls <= maxCalls) {
+    Serial.println("Running WeatherByZipcode - Run #" + String(calls++));
     
-    // Read the value of the sensors
-    int tmb_switchCurrentValue = tmb_switch.read(&tmb_switchConfig);
+    TembooChoreo WeatherByZipcodeChoreo;
 
-    // Send sensor values to Temboo 
-    msg.updatePinValue(tmb_switch.getSensorPin(&tmb_switchConfig), tmb_switchCurrentValue);
+    // Invoke the Temboo client
+    WeatherByZipcodeChoreo.begin();
+
+    // Set Temboo account credentials
+    WeatherByZipcodeChoreo.setAccountName(TEMBOO_ACCOUNT);
+    WeatherByZipcodeChoreo.setAppKeyName(TEMBOO_APP_KEY_NAME);
+    WeatherByZipcodeChoreo.setAppKey(TEMBOO_APP_KEY);
+    
+    // Set profile to use for execution
+    WeatherByZipcodeChoreo.setProfile("MyCurrentWeather");
+    
+    // Identify the Choreo to run
+    WeatherByZipcodeChoreo.setChoreo("/Library/NOAA/WeatherByZipcode");
+    
+    // Run the Choreo; when results are available, print them to serial
+    WeatherByZipcodeChoreo.run();
+    
+    while(WeatherByZipcodeChoreo.available()) {
+      char c = WeatherByZipcodeChoreo.read();
+      Serial.print(c);
+    }
+    WeatherByZipcodeChoreo.close();
   }
-  // Print debug information from Temboo's Messenger
-  while (msg.available()) {
-    char c = msg.read();
-    Serial.print(c);
-  }
+
+  Serial.println("Waiting...");
+  delay(30000); // wait 30 seconds between WeatherByZipcode calls
 }
-
-void runWeatherByZipcode(int sensorValue) {
-  TembooChoreo WeatherByZipcodeChoreo;
-
-  // Invoke the Temboo client
-  WeatherByZipcodeChoreo.begin();
-
-  // Set Temboo account credentials
-  WeatherByZipcodeChoreo.setAccountName(TEMBOO_ACCOUNT);
-  WeatherByZipcodeChoreo.setAppKeyName(TEMBOO_APP_KEY_NAME);
-  WeatherByZipcodeChoreo.setAppKey(TEMBOO_APP_KEY);
-  WeatherByZipcodeChoreo.setDeviceName(TEMBOO_DEVICE_NAME);
-
-  // Identify the Choreo to run
-  WeatherByZipcodeChoreo.setChoreo("/Library/NOAA/WeatherByZipcode");
-
-  // Run the Choreo
-  WeatherByZipcodeChoreo.runAsynchronously();
-
-  unsigned long startChoreoTime = millis();
-
-  while(WeatherByZipcodeChoreo.running() && (millis() - startChoreoTime < TEMBOO_CHOREO_TIMEOUT_MS)) {
-    tembooMessagingLoop();
-  }
-
-  unsigned int returnCode = WeatherByZipcodeChoreo.exitValue();
-
-  // Read and print the error message
-  while (WeatherByZipcodeChoreo.available()) {
-    char c = WeatherByZipcodeChoreo.read();
-    Serial.print(c);
-  }
-  Serial.println();
-  WeatherByZipcodeChoreo.close();
-}
-
-
-<?xml version="1.0"?>
-<dwml version="1.0" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://graphical.weather.gov/xml/DWMLgen/schema/DWML.xsd">
-  <head>
-    <product srsName="WGS 1984" concise-name="glance" operational-mode="official">
-      <title>NOAA's National Weather Service Forecast at a Glance</title>
-      <field>meteorological</field>
-      <category>forecast</category>
-      <creation-date refresh-frequency="PT1H">2012-01-20T17:40:19Z</creation-date>
-    </product>
-    <source>
-      <more-information>http://graphical.weather.gov/xml/</more-information>
-      <production-center>Meteorological Development Laboratory<sub-center>Product Generation Branch</sub-center></production-center>
-      <disclaimer>http://www.nws.noaa.gov/disclaimer.html</disclaimer>
-      <credit>http://www.weather.gov/</credit>
-      <credit-logo>http://www.weather.gov/images/xml_logo.gif</credit-logo>
-      <feedback>http://www.weather.gov/feedback.php</feedback>
-    </source>
-  </head>
-  <data>
-    <location>
-      <location-key>point1</location-key>
-      <point latitude="40.65" longitude="-73.95"/>
-    </location>
-    <moreWeatherInformation applicable-location="point1">http://forecast.weather.gov/MapClick.php?textField1=40.65&amp;textField2=-73.95</moreWeatherInformation>
-    <time-layout time-coordinate="local" summarization="none">
-      <layout-key>k-p24h-n1-1</layout-key>
-      <start-valid-time period-name="Today">2012-01-20T07:00:00-05:00</start-valid-time>
-      <end-valid-time>2012-01-20T19:00:00-05:00</end-valid-time>
-    </time-layout>
-    <time-layout time-coordinate="local" summarization="none">
-      <layout-key>k-p3h-n1-2</layout-key>
-      <start-valid-time>2012-01-20T13:00:00-05:00</start-valid-time>
-    </time-layout>
-    <parameters applicable-location="point1">
-      <temperature type="maximum" units="Fahrenheit" time-layout="k-p24h-n1-1">
-        <name>Daily Maximum Temperature</name>
-        <value>33</value>
-      </temperature>
-      <cloud-amount type="total" units="percent" time-layout="k-p3h-n1-2">
-        <name>Cloud Cover Amount</name>
-        <value>10</value>
-      </cloud-amount>
-      <weather time-layout="k-p3h-n1-2">
-        <name>Weather Type, Coverage, and Intensity</name>
-        <weather-conditions/>
-      </weather>
-      <conditions-icon type="forecast-NWS" time-layout="k-p3h-n1-2">
-        <name>Conditions Icons</name>
-        <icon-link>http://forecast.weather.gov/images/wtf/few.jpg</icon-link>
-      </conditions-icon>
-    </parameters>
-  </data>
-</dwml>
