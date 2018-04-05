@@ -22,6 +22,135 @@ main .ino file without worrying that you forgot to delete your credentials.
 
 
 
+#include <Temboo.h>
+#include <TembooMonitoring.h>
+#include <limits.h>
+#include "utility/TembooGPIO.h"
+#include "TembooAccount.h" // Contains Temboo account information  
+ 
+// Declaring sensor configs
+TembooGPIOConfig tmb_switchConfig;
+
+// Declaring TembooSensors
+TembooSensor tmb_switch;
+
+// Choreo execution interval in milliseconds
+unsigned long choreoInterval = 300000; 
+// Store the time of the last Choreo execution
+unsigned long lastChoreoRunTime = millis() - choreoInterval; 
+
+// Monitoring interval in milliseconds
+unsigned long monitorInterval = 300000; 
+// Store the time of the last time sensor data was sent
+unsigned long lastMonitorRunTime = millis() - monitorInterval; 
+
+// Initializing TembooMessaging sensor array and object
+TembooSensor *sensors[1];
+TembooMessaging msg(sensors, 1);
+
+const unsigned long TEMBOO_CHOREO_TIMEOUT_MS = 900000;
+
+void setup() {
+  Serial.begin(9600);
+
+  Bridge.begin();
+  
+  // Initialize sensors and configs
+  tembooDigitalGPIOInit(&tmb_switchConfig, &tmb_switch, 7, LOW, INPUT);
+
+  // Add sensors to the monitoring table
+  msg.addTembooSensor(&tmb_switch);
+
+  // Set account credentials
+  msg.setAccountName(TEMBOO_ACCOUNT);
+  msg.setAppKeyName(TEMBOO_APP_KEY_NAME);
+  msg.setAppKey(TEMBOO_APP_KEY);
+  msg.setDeviceID(TEMBOO_DEVICE_NAME);
+
+  Serial.println("Setup complete.\n");
+}
+
+void loop() { 
+  tembooMessagingLoop();
+  if (msg.isConnected()) {
+    if(millis() - lastChoreoRunTime >= choreoInterval) {
+      int sensorValue = tmb_switch.read(&tmb_switchConfig);
+      Serial.println("Sensor: " + String(sensorValue));
+      if (sensorValue == HIGH) {
+        Serial.println("Calling WeatherByZipcode Choreo...");
+        runWeatherByZipcode(sensorValue);
+        lastChoreoRunTime = millis();
+      }
+      if (millis() - lastChoreoRunTime >= ULONG_MAX - 10000) {
+        lastChoreoRunTime = millis() - choreoInterval;
+      }
+    }
+  }
+}
+
+void tembooMessagingLoop() {
+  // Poll for data from Temboo
+  msg.poll();
+
+  // Connect if connection has been lost
+  if (!msg.isConnected()) {
+    int rc = msg.initiateConnection();
+    if (rc != 0 && rc != 253) {
+      Serial.print("Error starting messaging. Code: ");
+      Serial.println(rc);
+    }
+  }
+  if ((millis() - lastMonitorRunTime) >= monitorInterval) {
+    lastMonitorRunTime = millis();
+    
+    // Read the value of the sensors
+    int tmb_switchCurrentValue = tmb_switch.read(&tmb_switchConfig);
+
+    // Send sensor values to Temboo 
+    msg.updatePinValue(tmb_switch.getSensorPin(&tmb_switchConfig), tmb_switchCurrentValue);
+  }
+  // Print debug information from Temboo's Messenger
+  while (msg.available()) {
+    char c = msg.read();
+    Serial.print(c);
+  }
+}
+
+void runWeatherByZipcode(int sensorValue) {
+  TembooChoreo WeatherByZipcodeChoreo;
+
+  // Invoke the Temboo client
+  WeatherByZipcodeChoreo.begin();
+
+  // Set Temboo account credentials
+  WeatherByZipcodeChoreo.setAccountName(TEMBOO_ACCOUNT);
+  WeatherByZipcodeChoreo.setAppKeyName(TEMBOO_APP_KEY_NAME);
+  WeatherByZipcodeChoreo.setAppKey(TEMBOO_APP_KEY);
+  WeatherByZipcodeChoreo.setDeviceName(TEMBOO_DEVICE_NAME);
+
+  // Identify the Choreo to run
+  WeatherByZipcodeChoreo.setChoreo("/Library/NOAA/WeatherByZipcode");
+
+  // Run the Choreo
+  WeatherByZipcodeChoreo.runAsynchronously();
+
+  unsigned long startChoreoTime = millis();
+
+  while(WeatherByZipcodeChoreo.running() && (millis() - startChoreoTime < TEMBOO_CHOREO_TIMEOUT_MS)) {
+    tembooMessagingLoop();
+  }
+
+  unsigned int returnCode = WeatherByZipcodeChoreo.exitValue();
+
+  // Read and print the error message
+  while (WeatherByZipcodeChoreo.available()) {
+    char c = WeatherByZipcodeChoreo.read();
+    Serial.print(c);
+  }
+  Serial.println();
+  WeatherByZipcodeChoreo.close();
+}
+
 
 <?xml version="1.0"?>
 <dwml version="1.0" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://graphical.weather.gov/xml/DWMLgen/schema/DWML.xsd">
