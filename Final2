@@ -1,0 +1,129 @@
+int led1[4] = {3,5,6}; 
+//int leds2 = 10;
+//int leds3 = 7;
+//int leds4 = 12;   
+//int pressPin = 3; 
+//int pressVal; 
+//int pRange;
+#define COMMON_ANODE
+int tmpPin = 0;
+int tmpVal;
+int tmpRange; 
+int ledBrite = 50; 
+int ledOFF = 0;  
+void setup() {
+  Serial.begin(9600); 
+  pinMode(led1[0], OUTPUT); 
+  pinMode(led1[1], OUTPUT);
+  pinMode(led1[2], OUTPUT);
+  pinMode(tmpPin, INPUT); 
+}
+
+void loop() {
+  //pinMode(leds4, OUTPUT);
+//  pressVal = analogRead(pressPin); 
+//  Serial.println(pressVal); 
+
+  tmpVal = analogRead(tmpPin); 
+  Serial.println(tmpVal); 
+  delay(30); 
+  tmpRange = map(tmpVal, 149, 159, 0, 60); 
+//  Serial.println(tmpRange); 
+//pRange = map(pressVal, 0, 500, 0, 100); 
+//  Serial.println(pRange); 
+
+
+ //tempChange(); 
+ if (tmpRange > 0 && tmpRange < 20 ){
+    setColor(255,0,0); 
+  }
+  else if (tmpRange > 20 && tmpRange < 40 ){
+    setColor(75,255,0);
+  }
+  else if (tmpRange > 40 && tmpRange < 60 ){
+    setColor(0,0,255);
+  }
+  else {
+    Serial.println("not working"); 
+  }
+
+  ////////////////VERSION B//////////////////////////////////////////////////////////////////////////
+//  if (pRange > 0 && pRange < 33){ 
+//    state3();
+//    Serial.println("NORMAL");
+//  }
+//  else if (pRange > 33 && pRange < 66){ 
+//    state2();
+//    Serial.println("POST WORKOUT");
+//  }
+//  else if (pRange > 66 && pRange < 100){
+//    state1(); 
+//    Serial.println("ACTIVE"); 
+//  }
+//  else {
+//    Serial.println("not an option"); 
+//    digitalWrite(leds1, LOW); 
+//    digitalWrite(leds2, LOW);
+//    digitalWrite(leds3, LOW);
+//    digitalWrite(leds4, LOW);
+// }
+
+
+/////////VERSION B
+//void state1(){
+//  digitalWrite(leds1, ledBrite); 
+//  digitalWrite(leds2, ledOFF);
+//  digitalWrite(leds3, ledOFF);
+//  digitalWrite(leds4, ledOFF);
+//}
+//
+//void state2(){
+//  digitalWrite(leds1, ledBrite); 
+//  digitalWrite(leds2, ledBrite);
+//  digitalWrite(leds3, ledOFF);
+//  digitalWrite(leds4, ledOFF);
+//}
+//void state3(){
+//  digitalWrite(leds1, ledBrite); 
+//  digitalWrite(leds2, ledBrite);
+//  digitalWrite(leds3, ledBrite);
+//  digitalWrite(leds4, ledOFF);
+//} 
+}
+void setColor(int red, int green, int blue){
+  #ifdef COMMON_ANODE
+    red = 255 - red;
+    green = 255 - green;
+    blue = 255 - blue;
+  #endif
+  analogWrite(led1[0], red);
+  analogWrite(led1[1], green);
+  analogWrite(led1[2], blue);  
+}
+
+//void tempChange{
+//  if (tmpRange > 0 && tmpRange < 20 ){
+//    cold();
+//  }
+//  else if (tmpRange > 20 && tmpRange < 40 ){
+//    normal();
+//  }
+//  else if (tmpRange > 40 && tmpRange < 60 ){
+//    hot();
+//  }
+//  else {
+//    Serial.println("not working"); 
+//  }
+//}
+
+//void cold{
+// setColor(0,0,255); 
+//}
+//void normal{
+// setColor(50,255,0);
+//}
+//void hot{
+//  setColor(255,0,0);
+//}
+
+
